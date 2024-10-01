@@ -34,7 +34,6 @@ public class JdbcJsonClient
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
 			setParams(params, st);
-			st.setQueryTimeout(10);
 			ResultSet rs = st.executeQuery();
 			ResultSetMetaData metaData = rs.getMetaData();
 			while (rs.next())

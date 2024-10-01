@@ -42,7 +42,7 @@ export function createConnection({
   const jt400: Connection = {
     ...baseConnection,
     async transaction(transactionFunction) {
-      const t = connection.createTransactionSync()
+      const t = await connection.createTransaction()
       const transactionContext = createBaseConnection(
         t,
         insertListFun,

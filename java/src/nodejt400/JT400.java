@@ -217,10 +217,6 @@ class Pool implements ConnectionProvider {
 		long t = System.currentTimeMillis();
 		Connection c = sqlPool.getConnection();
 
-		Executor executor = Executors.newFixedThreadPool(2);
-		int timeoutSeconds = 60; // Seconds for network timeout
-		c.setNetworkTimeout(executor, timeoutSeconds * 1000);
-
 		t = System.currentTimeMillis() - t;
 		if (t >= logConnectionTimeThreshold) {
 			System.out.println("Connect time: " + t);

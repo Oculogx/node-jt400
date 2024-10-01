@@ -93,6 +93,7 @@ export interface IfsWriteStream {
 
 export interface JT400 extends JDBCConnection {
   createTransactionSync: () => Transaction
+  createTransaction: () => Promise<Transaction>
   getPrimaryKeys: (
     catalog: string,
     schema: string,
