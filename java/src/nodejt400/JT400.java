@@ -203,6 +203,9 @@ class Pool implements ConnectionProvider {
         }
 
         this.sqlPool = new AS400JDBCConnectionPool(ds);
+		this.sqlPool.setPretestConnections(true);
+		this.sqlPool.setRunMaintenance(true);
+
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
 			public void run() {
