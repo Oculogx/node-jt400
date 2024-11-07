@@ -35,4 +35,4 @@ over the nodejt400:jar-node_modules and click the "Edit..." button.
 7. Run `git add .` to add all changes
 8. Run `git commit -m "Update to version X.X.X"` to commit the changes
 9. Run `git push` to push the changes to the remote repository
-10 Run `npm publish` to publish the changes to the npm repository
+10. Run `npm publish` to publish the changes to the npm repository
