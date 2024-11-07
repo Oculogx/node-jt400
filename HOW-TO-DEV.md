@@ -1,7 +1,7 @@
 # Setup
 Download the latest version of IntelliJ IDEA (https://www.jetbrains.com/idea/download/)
 Configure to the correct version of Node.js (https://nodejs.org/en/download/)
-Configure to the correct version of Java (https://www.oracle.com/java/technologies/javase-downloads.html)
+Configure to the correct version of Java (https://adoptium.net/temurin/)
 
 # Configuration
 1. In the top-bar, go to the "Build" menu and select "Build Artifacts...".
