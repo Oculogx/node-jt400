@@ -56,7 +56,7 @@
     "@types/node": "^20.10.4",
     "chai": "^4.3.10",
     "husky": "^8.0.3",
-    "mocha": "^10.2.0",
+    "mocha": "^10.8.2",
     "prettier": "^2.3.2",
     "source-map-support": "^0.5.21",
     "stream-equal": "^2.0.1",
