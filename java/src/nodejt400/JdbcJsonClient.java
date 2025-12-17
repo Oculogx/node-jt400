@@ -7,6 +7,8 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
 
+import com.ibm.as400.access.AS400JDBCConnectionHandle;
+
 import java.io.StringReader;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -26,7 +28,16 @@ public class JdbcJsonClient
 	public String query(String sql, String paramsJson, boolean trim)
 			throws Exception
 	{
+		long startTime = System.currentTimeMillis();
 		Connection c = pool.getConnection();
+		String jobId = getJobIdentifier(c);
+		String queryId = "q-" + System.currentTimeMillis();
+		
+		System.out.println("[QUERY AUDIT] Starting | " +
+			"queryId=" + queryId + " | " +
+			"jobId=" + jobId + " | " +
+			"sqlChars=" + sql.length());
+		
 		PreparedStatement st = null;
 		JSONArray array = new JSONArray();
 		try
@@ -117,9 +128,22 @@ public class JdbcJsonClient
 				}
 				array.add(json);
 			}
+			
+			long duration = System.currentTimeMillis() - startTime;
+			System.out.println("[QUERY AUDIT] Complete | " +
+				"queryId=" + queryId + " | " +
+				"jobId=" + jobId + " | " +
+				"durationMs=" + duration + " | " +
+				"rows=" + array.size());
 		}
 		catch (Exception e)
 		{
+			long duration = System.currentTimeMillis() - startTime;
+			System.out.println("[QUERY AUDIT] FAILED | " +
+				"queryId=" + queryId + " | " +
+				"jobId=" + jobId + " | " +
+				"durationMs=" + duration + " | " +
+				"error=" + e.getClass().getSimpleName() + ":" + e.getMessage());
 			throw e;
 		}
 		finally
@@ -387,5 +411,24 @@ public class JdbcJsonClient
 	private JSONArray parseParams(String paramsJson)
 	{
 		return (JSONArray) JSONValue.parse(paramsJson);
+	}
+
+	private String getJobIdentifier(Connection c) {
+		try {
+			if (c instanceof AS400JDBCConnectionHandle) {
+				AS400JDBCConnectionHandle handle = (AS400JDBCConnectionHandle) c;
+				String rawJobId = handle.getServerJobIdentifier();
+				if (rawJobId != null && rawJobId.length() >= 26) {
+					// Format as: jobNumber/userName/jobName (standard AS400 notation)
+					return rawJobId.substring(20).trim() + "/" + 
+						   rawJobId.substring(10, 20).trim() + "/" + 
+						   rawJobId.substring(0, 10).trim();
+				}
+				return rawJobId != null ? rawJobId : "null";
+			}
+			return "unknown";
+		} catch (Exception e) {
+			return "error:" + e.getMessage();
+		}
 	}
 }

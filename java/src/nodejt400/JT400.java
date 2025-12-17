@@ -6,6 +6,9 @@ import java.sql.SQLException;
 import java.util.Properties;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
@@ -173,6 +176,8 @@ class SimpleConnection implements ConnectionProvider {
 class Pool implements ConnectionProvider {
 	private final AS400JDBCConnectionPool sqlPool;
 	private final long logConnectionTimeThreshold;
+	private final AtomicLong connectionCounter = new AtomicLong(0);
+	private final SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
 
 	public Pool(JSONObject jsonConf) {
 		Properties connectionProps = new Properties();
@@ -217,19 +222,57 @@ class Pool implements ConnectionProvider {
 
 	@Override
 	public Connection getConnection() throws Exception {
-		long t = System.currentTimeMillis();
+		long startTime = System.currentTimeMillis();
+		long connId = connectionCounter.incrementAndGet();
+		
 		Connection c = sqlPool.getConnection();
-
-		t = System.currentTimeMillis() - t;
-		if (t >= logConnectionTimeThreshold) {
-			System.out.println("Connect time: " + t);
+		
+		long acquireTime = System.currentTimeMillis() - startTime;
+		
+		// Get the AS400 job identifier for audit logging
+		String jobId = getJobIdentifier(c);
+		
+		// Always log connection acquisition with job ID (for zombie connection audit)
+		System.out.println("[POOL AUDIT] Connection acquired | " +
+			"connId=" + connId + " | " +
+			"jobId=" + jobId + " | " +
+			"acquireTimeMs=" + acquireTime + " | " +
+			"activeCount=" + sqlPool.getActiveConnectionCount() + " | " +
+			"availableCount=" + sqlPool.getAvailableConnectionCount() + " | " +
+			"timestamp=" + isoFormat.format(new Date()));
+		
+		// Keep existing threshold logging for backwards compatibility
+		if (acquireTime >= logConnectionTimeThreshold) {
+			System.out.println("Connect time: " + acquireTime);
 		}
+		
 		return c;
 	}
 
 	@Override
 	public void returnConnection(Connection c) throws Exception {
+		String jobId = getJobIdentifier(c);
+		System.out.println("[POOL AUDIT] Connection returned | jobId=" + jobId);
 		c.close();
+	}
+
+	private String getJobIdentifier(Connection c) {
+		try {
+			if (c instanceof AS400JDBCConnectionHandle) {
+				AS400JDBCConnectionHandle handle = (AS400JDBCConnectionHandle) c;
+				String rawJobId = handle.getServerJobIdentifier();
+				if (rawJobId != null && rawJobId.length() >= 26) {
+					// Format as: jobNumber/userName/jobName (standard AS400 notation)
+					return rawJobId.substring(20).trim() + "/" + 
+						   rawJobId.substring(10, 20).trim() + "/" + 
+						   rawJobId.substring(0, 10).trim();
+				}
+				return rawJobId != null ? rawJobId : "null";
+			}
+			return "not-AS400JDBCConnectionHandle:" + c.getClass().getSimpleName();
+		} catch (Exception e) {
+			return "error:" + e.getMessage();
+		}
 	}
 
 	@Override
