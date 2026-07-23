@@ -41,15 +41,31 @@ public class JT400 {
 	/**
 	 * Parses the optional "query timeout" config value (in SECONDS). Returns 0
 	 * (disabled) when absent or unparseable.
+	 *
+	 * The cancel this enables only reaches a server that is alive but slow or
+	 * lock-blocked (it is delivered over a separate connection). Pair it with
+	 * the "socket timeout" JDBC property (MILLISECONDS) as a backstop for
+	 * unreachable-host scenarios, keeping query timeout below socket timeout
+	 * so the graceful cancel fires first.
 	 */
 	static int parseQueryTimeout(JSONObject conf) {
-		Object raw = conf.get("query timeout");
+		return parsePositiveIntConfig(conf, "query timeout");
+	}
+
+	/**
+	 * Parses an optional integer config value. Returns 0 when the key is
+	 * absent; warns and returns 0 when unparseable so a typo degrades to the
+	 * previous behavior loudly instead of silently.
+	 */
+	static int parsePositiveIntConfig(JSONObject conf, String key) {
+		Object raw = conf.get(key);
 		if (raw == null) {
 			return 0;
 		}
 		try {
 			return Integer.parseInt(raw.toString().trim());
 		} catch (NumberFormatException e) {
+			System.out.println("[node-jt400] Ignoring invalid \"" + key + "\" config value: " + raw);
 			return 0;
 		}
 	}
@@ -209,6 +225,9 @@ class Pool implements ConnectionProvider {
 		connectionProps.remove("host");
 		connectionProps.remove("user");
 		connectionProps.remove("password");
+		// Not a JDBC property; consumed below via setMaxConnections. The
+		// driver ignores unknown keys, but keep the properties clean anyway.
+		connectionProps.remove("connectionLimit");
 
 		this.queryTimeout = JT400.parseQueryTimeout(jsonConf);
 		connectionProps.remove("query timeout");
@@ -241,6 +260,16 @@ class Pool implements ConnectionProvider {
 		this.sqlPool.setPretestConnections(true);
 		this.sqlPool.setRunMaintenance(true);
 
+		// Historically "connectionLimit" was accepted in the config but never
+		// applied, leaving the pool unbounded. Honor it when present. NOTE:
+		// once the limit is reached, getConnection() throws
+		// ConnectionPoolException(MAX_CONNECTIONS_REACHED) rather than queuing.
+		int connectionLimit = JT400.parsePositiveIntConfig(jsonConf, "connectionLimit");
+		if (connectionLimit > 0) {
+			this.sqlPool.setMaxConnections(connectionLimit);
+			System.out.println("[node-jt400] Pool max connections: " + connectionLimit);
+		}
+
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
 			public void run() {
@@ -264,7 +293,13 @@ class Pool implements ConnectionProvider {
 
 	@Override
 	public void returnConnection(Connection c) throws Exception {
-		c.close();
+		try {
+			c.close();
+		} catch (Exception e) {
+			// Never let a failed return mask the caller's original exception.
+			// Pretesting/maintenance will discard a broken connection.
+			System.out.println("[node-jt400] Failed to return connection to pool: " + e);
+		}
 	}
 
 	@Override

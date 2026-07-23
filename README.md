@@ -56,6 +56,24 @@ const config = {
 const pool = require('node-jt400').pool(config)
 ```
 
+### Pool options
+
+On top of the JDBC properties, `pool()` accepts these pool-level options:
+
+- `'query timeout'` (seconds, string or number): applied to every statement via `Statement.setQueryTimeout`. When set, the `'query timeout mechanism'` JDBC property defaults to `'cancel'`, so a slow or lock-blocked statement is cancelled server-side after the timeout instead of hanging indefinitely. The cancel is delivered over a separate connection, so it only reaches a server that is alive — pair it with the `'socket timeout'` JDBC property (milliseconds) as a backstop for unreachable-host scenarios, keeping `'query timeout'` below `'socket timeout'` so the graceful cancel fires first.
+- `connectionLimit` (number): caps the connection pool (`setMaxConnections`). When the cap is reached, acquiring a connection throws (`MAX_CONNECTIONS_REACHED`) rather than queuing. Omit to keep the pool unbounded (the previous behavior — note that versions before 5.1.0 accepted this option but silently ignored it).
+
+```javascript
+const pool = require('node-jt400').pool({
+  host: 'myhost',
+  user: 'myuser',
+  password: 'xxx',
+  'query timeout': '45', // seconds
+  'socket timeout': '55000', // milliseconds, backstop
+  connectionLimit: 32,
+})
+```
+
 To close the connection pool you can call `pool.close()`
 
 # SQL / Database

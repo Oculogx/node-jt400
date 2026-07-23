@@ -15,6 +15,7 @@ public class StatementWrap {
 	private boolean isQuery;
 	private ResultSet rs;
 	private int updated = -1;
+	private boolean closed = false;
 
 	public StatementWrap(ConnectionProvider connectionProvider, Connection c,
 			PreparedStatement st) throws Exception {
@@ -32,10 +33,20 @@ public class StatementWrap {
 	}
 
 	public void close() throws Exception {
-		if (rs != null) {
-			rs.close();
+		if (closed) {
+			return;
 		}
-		st.close();
+		closed = true;
+		try {
+			if (rs != null) {
+				rs.close();
+			}
+			st.close();
+		} catch (Exception e) {
+			// A close can fail on a broken connection; the connection must
+			// still be returned or it leaks from the pool.
+			System.out.println("[node-jt400] Failed to close statement: " + e);
+		}
 		connectionProvider.returnConnection(c);
 	}
 
@@ -95,9 +106,6 @@ public class StatementWrap {
 				array.add(toJSOnArray());
 			}
 			return array.toJSONString();
-		} catch (Exception e) {
-			close();
-			throw e;
 		} finally {
 			close();
 		}

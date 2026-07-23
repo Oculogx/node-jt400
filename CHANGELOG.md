@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. Please note that this changelog was added in version 4.0 so documentation on versions prior to that are incomplete.
 
+## [5.1.0] - 2026-07-23
+
+### Added
+
+- `'query timeout'` config option (seconds). Applies `Statement.setQueryTimeout` to every statement and defaults the `'query timeout mechanism'` JDBC property to `'cancel'`, so slow or lock-blocked statements are cancelled server-side instead of hanging indefinitely. Pair with the `'socket timeout'` JDBC property (milliseconds) as an unreachable-host backstop.
+- `connectionLimit` config option is now honored via `setMaxConnections` (previously accepted but silently ignored, leaving the pool unbounded). When the limit is reached, acquiring a connection throws rather than queuing.
+- `java/build-jar.sh` so the committed `jt400wrap.jar` is reproducible from source.
+
+### Fixed
+
+- Pooled connections are no longer leaked ("zombies") when cleanup fails on a broken connection — e.g. after a socket timeout — and cleanup failures no longer mask the original error: statement close failures in `finally` blocks, `Transaction.end()` autocommit-reset failures, and pool-return failures are now logged and contained.
+- `queryAsStream` no longer leaks its connection when the query fails to execute.
+- `StatementWrap`/`ResultStream` close is now idempotent (previously `asArray()` could return the same connection to the pool twice).
+
 ## [5.0.2] - 2024-05-30
 
 We had to revert form java-bridge back to the java dependency because of deadlock issues.

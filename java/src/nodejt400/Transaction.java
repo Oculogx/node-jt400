@@ -25,7 +25,15 @@ public class Transaction implements ConnectionProvider {
 	}
 
 	public void end() throws Exception {
-		this.connection.setAutoCommit(true);
+		try {
+			this.connection.setAutoCommit(true);
+		} catch (Exception e) {
+			// The connection is likely broken (e.g. socket timeout). Don't
+			// rethrow: end() runs in the caller's finally, so an error here
+			// would mask the original failure — and the connection must still
+			// be returned so the pool can pretest and discard it.
+			System.out.println("[node-jt400] Failed to reset autocommit on transaction end: " + e);
+		}
 		this.connectionProvider.returnConnection(this.connection);
 	}
 
