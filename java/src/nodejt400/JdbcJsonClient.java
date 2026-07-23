@@ -23,6 +23,22 @@ public class JdbcJsonClient
 		this.pool = pool;
 	}
 
+	/**
+	 * Applies the connection provider's configured query timeout (seconds) to a
+	 * statement before execution. 0 = disabled (no-op). Combined with the
+	 * "query timeout mechanism"="cancel" connection property, this makes the
+	 * driver cancel a running / lock-blocked query after the timeout instead of
+	 * hanging until the caller (or Cloud Run) gives up.
+	 */
+	private void applyQueryTimeout(Statement st) throws SQLException
+	{
+		int seconds = pool.getQueryTimeout();
+		if (seconds > 0)
+		{
+			st.setQueryTimeout(seconds);
+		}
+	}
+
 	public String query(String sql, String paramsJson, boolean trim)
 			throws Exception
 	{
@@ -33,6 +49,7 @@ public class JdbcJsonClient
 		{
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
+			applyQueryTimeout(st);
 			setParams(params, st);
 			ResultSet rs = st.executeQuery();
 			ResultSetMetaData metaData = rs.getMetaData();
@@ -139,6 +156,7 @@ public class JdbcJsonClient
 		try {
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
+			applyQueryTimeout(st);
 			setParams(params, st);
 			ResultSet rs = st.executeQuery();
 			return new ResultStream(pool, c, st, rs, bufferSize);
@@ -156,6 +174,7 @@ public class JdbcJsonClient
 		{
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
+			applyQueryTimeout(st);
 			setParams(params, st);
 			return new StatementWrap(pool, c, st);
 		}
@@ -256,6 +275,7 @@ public class JdbcJsonClient
 		{
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
+			applyQueryTimeout(st);
 			setParams(params, st);
 			result = st.executeUpdate();
 		}
@@ -279,6 +299,7 @@ public class JdbcJsonClient
 		int[] result = null;
 		try {
 			st = c.prepareStatement(sql);
+			applyQueryTimeout(st);
 			JSONArray jsonArray = (JSONArray) JSONValue.parse(paramsListJson);
 			int n = jsonArray.size();
 			for (int i = 0; i < n; i++) {
@@ -307,6 +328,7 @@ public class JdbcJsonClient
 		{
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+			applyQueryTimeout(st);
 			setParams(params, st);
 			st.executeUpdate();
 			ResultSet keys = st.getGeneratedKeys();

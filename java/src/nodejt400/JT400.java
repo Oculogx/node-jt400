@@ -38,6 +38,22 @@ public class JT400 {
 		return new JT400(new Pool(conf));
 	}
 
+	/**
+	 * Parses the optional "query timeout" config value (in SECONDS). Returns 0
+	 * (disabled) when absent or unparseable.
+	 */
+	static int parseQueryTimeout(JSONObject conf) {
+		Object raw = conf.get("query timeout");
+		if (raw == null) {
+			return 0;
+		}
+		try {
+			return Integer.parseInt(raw.toString().trim());
+		} catch (NumberFormatException e) {
+			return 0;
+		}
+	}
+
 	public String query(String sql, String paramsJson, boolean trim)
 			throws Exception {
 		return client.query(sql, paramsJson, trim);
@@ -141,11 +157,18 @@ public class JT400 {
 
 class SimpleConnection implements ConnectionProvider {
 	private final Connection connection;
+	private final int queryTimeout;
 
 	public SimpleConnection(JSONObject jsonConf)
 			throws Exception {
 		Properties connectionProps = new Properties();
 		connectionProps.putAll(jsonConf);
+
+		this.queryTimeout = JT400.parseQueryTimeout(jsonConf);
+		connectionProps.remove("query timeout");
+		if (this.queryTimeout > 0 && !connectionProps.containsKey("query timeout mechanism")) {
+			connectionProps.setProperty("query timeout mechanism", "cancel");
+		}
 
 		DriverManager.registerDriver(new AS400JDBCDriver());
 		connection = DriverManager.getConnection("jdbc:as400://" + jsonConf.get("host"), connectionProps);
@@ -161,6 +184,11 @@ class SimpleConnection implements ConnectionProvider {
 	}
 
 	@Override
+	public int getQueryTimeout() {
+		return queryTimeout;
+	}
+
+	@Override
 	public void close() {
 		try {
 			connection.close();
@@ -173,6 +201,7 @@ class SimpleConnection implements ConnectionProvider {
 class Pool implements ConnectionProvider {
 	private final AS400JDBCConnectionPool sqlPool;
 	private final long logConnectionTimeThreshold;
+	private final int queryTimeout;
 
 	public Pool(JSONObject jsonConf) {
 		Properties connectionProps = new Properties();
@@ -180,6 +209,12 @@ class Pool implements ConnectionProvider {
 		connectionProps.remove("host");
 		connectionProps.remove("user");
 		connectionProps.remove("password");
+
+		this.queryTimeout = JT400.parseQueryTimeout(jsonConf);
+		connectionProps.remove("query timeout");
+		if (this.queryTimeout > 0 && !connectionProps.containsKey("query timeout mechanism")) {
+			connectionProps.setProperty("query timeout mechanism", "cancel");
+		}
 
 		String conTimeThresshold = System.getenv("LOG_CONNECTION_TIME_THRESHOLD");
 		if (conTimeThresshold == null) {
@@ -230,6 +265,11 @@ class Pool implements ConnectionProvider {
 	@Override
 	public void returnConnection(Connection c) throws Exception {
 		c.close();
+	}
+
+	@Override
+	public int getQueryTimeout() {
+		return queryTimeout;
 	}
 
 	@Override

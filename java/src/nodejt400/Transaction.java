@@ -78,6 +78,11 @@ public class Transaction implements ConnectionProvider {
 	}
 
 	@Override
+	public int getQueryTimeout() {
+		return connectionProvider.getQueryTimeout();
+	}
+
+	@Override
 	public void close() {
 		try {
 			connectionProvider.returnConnection(connection);

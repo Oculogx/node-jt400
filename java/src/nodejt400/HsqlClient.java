@@ -28,6 +28,12 @@ public class HsqlClient implements ConnectionProvider
 	}
 
 	@Override
+	public int getQueryTimeout()
+	{
+		return 0;
+	}
+
+	@Override
 	public void close(){
 	}
 
