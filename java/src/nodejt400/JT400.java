@@ -2,7 +2,9 @@ package nodejt400;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
+import java.util.HashSet;
 import java.util.Properties;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -58,21 +60,95 @@ public class JT400 {
 	 * previous behavior loudly instead of silently.
 	 */
 	static int parsePositiveIntConfig(JSONObject conf, String key) {
+		return (int) parseLongConfig(conf, key, 0);
+	}
+
+	/**
+	 * Parses an optional long config value. Returns the fallback when the key
+	 * is absent; warns and returns the fallback when unparseable.
+	 */
+	static long parseLongConfig(JSONObject conf, String key, long fallback) {
 		Object raw = conf.get(key);
 		if (raw == null) {
-			return 0;
+			return fallback;
 		}
 		try {
-			return Integer.parseInt(raw.toString().trim());
+			return Long.parseLong(raw.toString().trim());
 		} catch (NumberFormatException e) {
 			System.out.println("[node-jt400] Ignoring invalid \"" + key + "\" config value: " + raw);
-			return 0;
+			return fallback;
+		}
+	}
+
+	/**
+	 * Parses an optional boolean config value ("true"/"false", any casing, or
+	 * JSON booleans). Returns the fallback when absent; warns and returns the
+	 * fallback when unparseable.
+	 */
+	static boolean parseBooleanConfig(JSONObject conf, String key, boolean fallback) {
+		Object raw = conf.get(key);
+		if (raw == null) {
+			return fallback;
+		}
+		String value = raw.toString().trim().toLowerCase();
+		if (value.equals("true")) {
+			return true;
+		}
+		if (value.equals("false")) {
+			return false;
+		}
+		System.out.println("[node-jt400] Ignoring invalid \"" + key + "\" config value: " + raw);
+		return fallback;
+	}
+
+	/**
+	 * Copies the JSON config into Properties, coercing every value to a
+	 * String. The driver reads values via Properties.getProperty(), which
+	 * returns null for non-String values — so without coercion a JSON number
+	 * (e.g. "socket timeout": 45000) would be silently dropped.
+	 */
+	static Properties toProperties(JSONObject conf) {
+		Properties props = new Properties();
+		for (Object key : conf.keySet()) {
+			Object value = conf.get(key);
+			if (key != null && value != null) {
+				props.setProperty(key.toString(), value.toString());
+			}
+		}
+		return props;
+	}
+
+	/**
+	 * Best-effort validation: warns for config keys the JDBC driver does not
+	 * recognize, because the driver ignores unknown properties silently (a
+	 * misspelled option would otherwise just not take effect).
+	 */
+	static void warnUnknownProperties(Properties props, String host) {
+		try {
+			DriverPropertyInfo[] known = new AS400JDBCDriver()
+					.getPropertyInfo("jdbc:as400://" + host, new Properties());
+			HashSet<String> names = new HashSet<String>();
+			for (DriverPropertyInfo info : known) {
+				names.add(info.name);
+			}
+			for (Object key : props.keySet()) {
+				if (!names.contains(key.toString())) {
+					System.out.println("[node-jt400] Config option not recognized by the JDBC driver (ignored): " + key);
+				}
+			}
+		} catch (Exception e) {
+			// validation is best-effort only
 		}
 	}
 
 	public String query(String sql, String paramsJson, boolean trim)
 			throws Exception {
 		return client.query(sql, paramsJson, trim);
+	}
+
+	public String query(String sql, String paramsJson, boolean trim, int queryTimeoutSeconds)
+			throws Exception {
+		return client.query(sql, paramsJson, trim, queryTimeoutSeconds);
 	}
 
 	public ResultStream queryAsStream(String sql, String paramsJson,
@@ -107,6 +183,22 @@ public class JT400 {
 	public int update(String sql, String paramsJson)
 			throws Exception {
 		return client.update(sql, paramsJson);
+	}
+
+	public int update(String sql, String paramsJson, int queryTimeoutSeconds)
+			throws Exception {
+		return client.update(sql, paramsJson, queryTimeoutSeconds);
+	}
+
+	/**
+	 * Point-in-time pool counters for observability. Returns {} for
+	 * non-pooled providers.
+	 */
+	public String getPoolStats() {
+		if (connectionProvider instanceof Pool) {
+			return ((Pool) connectionProvider).getStatsJson();
+		}
+		return "{}";
 	}
 
 	public double insertAndGetId(String sql, String paramsJson)
@@ -177,8 +269,7 @@ class SimpleConnection implements ConnectionProvider {
 
 	public SimpleConnection(JSONObject jsonConf)
 			throws Exception {
-		Properties connectionProps = new Properties();
-		connectionProps.putAll(jsonConf);
+		Properties connectionProps = JT400.toProperties(jsonConf);
 
 		this.queryTimeout = JT400.parseQueryTimeout(jsonConf);
 		connectionProps.remove("query timeout");
@@ -215,25 +306,43 @@ class SimpleConnection implements ConnectionProvider {
 }
 
 class Pool implements ConnectionProvider {
+	// Wrapper-level pool options (values in ms unless noted), not JDBC
+	// properties. Consumed in the constructor and stripped from the
+	// properties handed to the driver.
+	private static final String[] POOL_OPTION_KEYS = {
+		"pool cleanup interval",
+		"pool max inactivity",
+		"pool max lifetime",
+		"pool max use count", // count, not ms
+		"pool max use time",
+		"pool pretest connections", // boolean
+		"pool run maintenance", // boolean
+		"pool thread used", // boolean
+	};
+
 	private final AS400JDBCConnectionPool sqlPool;
 	private final long logConnectionTimeThreshold;
 	private final int queryTimeout;
 
 	public Pool(JSONObject jsonConf) {
-		Properties connectionProps = new Properties();
-		connectionProps.putAll(jsonConf);
+		Properties connectionProps = JT400.toProperties(jsonConf);
 		connectionProps.remove("host");
 		connectionProps.remove("user");
 		connectionProps.remove("password");
 		// Not a JDBC property; consumed below via setMaxConnections. The
 		// driver ignores unknown keys, but keep the properties clean anyway.
 		connectionProps.remove("connectionLimit");
+		for (String poolKey : POOL_OPTION_KEYS) {
+			connectionProps.remove(poolKey);
+		}
 
 		this.queryTimeout = JT400.parseQueryTimeout(jsonConf);
 		connectionProps.remove("query timeout");
 		if (this.queryTimeout > 0 && !connectionProps.containsKey("query timeout mechanism")) {
 			connectionProps.setProperty("query timeout mechanism", "cancel");
 		}
+
+		JT400.warnUnknownProperties(connectionProps, (String) jsonConf.get("host"));
 
 		String conTimeThresshold = System.getenv("LOG_CONNECTION_TIME_THRESHOLD");
 		if (conTimeThresshold == null) {
@@ -257,8 +366,33 @@ class Pool implements ConnectionProvider {
         }
 
         this.sqlPool = new AS400JDBCConnectionPool(ds);
-		this.sqlPool.setPretestConnections(true);
-		this.sqlPool.setRunMaintenance(true);
+		// setThreadUsed must run before the pool is in use; keep it first.
+		if (jsonConf.containsKey("pool thread used")) {
+			this.sqlPool.setThreadUsed(JT400.parseBooleanConfig(jsonConf, "pool thread used", true));
+		}
+		this.sqlPool.setPretestConnections(JT400.parseBooleanConfig(jsonConf, "pool pretest connections", true));
+		this.sqlPool.setRunMaintenance(JT400.parseBooleanConfig(jsonConf, "pool run maintenance", true));
+
+		long cleanupInterval = JT400.parseLongConfig(jsonConf, "pool cleanup interval", 0);
+		if (cleanupInterval > 0) {
+			this.sqlPool.setCleanupInterval(cleanupInterval);
+		}
+		long maxInactivity = JT400.parseLongConfig(jsonConf, "pool max inactivity", 0);
+		if (maxInactivity > 0) {
+			this.sqlPool.setMaxInactivity(maxInactivity);
+		}
+		long maxLifetime = JT400.parseLongConfig(jsonConf, "pool max lifetime", 0);
+		if (maxLifetime > 0) {
+			this.sqlPool.setMaxLifetime(maxLifetime);
+		}
+		int maxUseCount = JT400.parsePositiveIntConfig(jsonConf, "pool max use count");
+		if (maxUseCount > 0) {
+			this.sqlPool.setMaxUseCount(maxUseCount);
+		}
+		long maxUseTime = JT400.parseLongConfig(jsonConf, "pool max use time", 0);
+		if (maxUseTime > 0) {
+			this.sqlPool.setMaxUseTime(maxUseTime);
+		}
 
 		// Historically "connectionLimit" was accepted in the config but never
 		// applied, leaving the pool unbounded. Honor it when present. NOTE:
@@ -305,6 +439,17 @@ class Pool implements ConnectionProvider {
 	@Override
 	public int getQueryTimeout() {
 		return queryTimeout;
+	}
+
+	/**
+	 * Point-in-time pool counters for observability.
+	 */
+	public String getStatsJson() {
+		JSONObject stats = new JSONObject();
+		stats.put("activeConnections", sqlPool.getActiveConnectionCount());
+		stats.put("availableConnections", sqlPool.getAvailableConnectionCount());
+		stats.put("maxConnections", sqlPool.getMaxConnections());
+		return stats.toJSONString();
 	}
 
 	@Override

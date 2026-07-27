@@ -26,11 +26,12 @@ export const createBaseConnection = function (
 
       // Sending default options to java
       const trim = options && options.trim !== undefined ? options.trim : true
+      const queryTimeout = options && options.queryTimeout
 
-      return jdbcConnection
-        .query(sql, jsonParams, trim)
-        .then(JSON.parse)
-        .catch(handleError({ sql, params }))
+      const result = queryTimeout
+        ? jdbcConnection.query(sql, jsonParams, trim, queryTimeout)
+        : jdbcConnection.query(sql, jsonParams, trim)
+      return result.then(JSON.parse).catch(handleError({ sql, params }))
     },
 
     createReadStream(sql, params) {
@@ -98,11 +99,14 @@ export const createBaseConnection = function (
         })
         .catch(handleError({ sql, params }))
     },
-    update(sql, params) {
+    update(sql, params, options) {
       const jsonParams = paramsToJson(params || [])
-      return jdbcConnection
-        .update(sql, jsonParams)
-        .catch(handleError({ sql, params }))
+      const queryTimeout = options && options.queryTimeout
+
+      const result = queryTimeout
+        ? jdbcConnection.update(sql, jsonParams, queryTimeout)
+        : jdbcConnection.update(sql, jsonParams)
+      return result.catch(handleError({ sql, params }))
     },
 
     createWriteStream(sql, options) {

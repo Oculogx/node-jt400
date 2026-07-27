@@ -74,6 +74,39 @@ const pool = require('node-jt400').pool({
 })
 ```
 
+The pool-level tuning knobs of the underlying `AS400JDBCConnectionPool` are also available (values in milliseconds unless noted):
+
+- `'pool cleanup interval'` — how often the maintenance daemon runs (default 300000)
+- `'pool max inactivity'` — idle connections older than this are closed (default 3600000)
+- `'pool max lifetime'` — connections older than this are closed (default 86400000)
+- `'pool max use count'` (count) — retire a connection after this many uses (default unlimited)
+- `'pool max use time'` — close connections in use longer than this (default unlimited)
+- `'pool pretest connections'` (boolean) — test connections before handing them out (default true)
+- `'pool run maintenance'` (boolean) — run the cleanup daemon (default true)
+- `'pool thread used'` (boolean) — use threads for pool maintenance (default true)
+
+Config keys the JDBC driver does not recognize are logged as warnings at pool creation (the driver itself silently ignores unknown properties), and all config values are coerced to strings before being handed to the driver, so numeric values work too.
+
+#### Per-call query timeout
+
+`query` and `update` accept a per-statement timeout (in seconds) that overrides the pool-wide `'query timeout'` for that call only — e.g. to give one slow report a higher ceiling than regular traffic:
+
+```javascript
+const rows = await pool.query('select * from big_table', [], {
+  queryTimeout: 300,
+})
+const n = await pool.update('update stock set ...', [], { queryTimeout: 5 })
+```
+
+#### Pool stats
+
+`pool.stats()` returns point-in-time pool counters for observability (empty object for non-pooled connections):
+
+```javascript
+const { activeConnections, availableConnections, maxConnections } =
+  await pool.stats()
+```
+
 To close the connection pool you can call `pool.close()`
 
 # SQL / Database

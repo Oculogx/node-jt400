@@ -32,7 +32,16 @@ public class JdbcJsonClient
 	 */
 	private void applyQueryTimeout(Statement st) throws SQLException
 	{
-		int seconds = pool.getQueryTimeout();
+		applyQueryTimeout(st, 0);
+	}
+
+	/**
+	 * overrideSeconds > 0 overrides the connection-wide "query timeout" for
+	 * this statement only; 0 falls back to the configured default.
+	 */
+	private void applyQueryTimeout(Statement st, int overrideSeconds) throws SQLException
+	{
+		int seconds = overrideSeconds > 0 ? overrideSeconds : pool.getQueryTimeout();
 		if (seconds > 0)
 		{
 			st.setQueryTimeout(seconds);
@@ -64,6 +73,12 @@ public class JdbcJsonClient
 	public String query(String sql, String paramsJson, boolean trim)
 			throws Exception
 	{
+		return query(sql, paramsJson, trim, 0);
+	}
+
+	public String query(String sql, String paramsJson, boolean trim, int queryTimeoutSeconds)
+			throws Exception
+	{
 		Connection c = pool.getConnection();
 		PreparedStatement st = null;
 		JSONArray array = new JSONArray();
@@ -71,7 +86,7 @@ public class JdbcJsonClient
 		{
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
-			applyQueryTimeout(st);
+			applyQueryTimeout(st, queryTimeoutSeconds);
 			setParams(params, st);
 			ResultSet rs = st.executeQuery();
 			ResultSetMetaData metaData = rs.getMetaData();
@@ -291,6 +306,12 @@ public class JdbcJsonClient
 	public int update(String sql, String paramsJson)
 			throws Exception
 	{
+		return update(sql, paramsJson, 0);
+	}
+
+	public int update(String sql, String paramsJson, int queryTimeoutSeconds)
+			throws Exception
+	{
 		Connection c = pool.getConnection();
 		PreparedStatement st = null;
 		int result = 0;
@@ -298,7 +319,7 @@ public class JdbcJsonClient
 		{
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
-			applyQueryTimeout(st);
+			applyQueryTimeout(st, queryTimeoutSeconds);
 			setParams(params, st);
 			result = st.executeUpdate();
 		}
