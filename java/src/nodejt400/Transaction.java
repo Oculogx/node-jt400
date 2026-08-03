@@ -42,6 +42,11 @@ public class Transaction implements ConnectionProvider {
 		return client.query(sql, paramsJson, trim);
 	}
 
+	public String query(String sql, String paramsJson, boolean trim, int queryTimeoutSeconds)
+			throws Exception {
+		return client.query(sql, paramsJson, trim, queryTimeoutSeconds);
+	}
+
 	public ResultStream queryAsStream(String sql, String paramsJson,
 			int bufferSize) throws Exception {
 		return client.queryAsStream(sql, paramsJson, bufferSize);
@@ -64,6 +69,11 @@ public class Transaction implements ConnectionProvider {
 	public int update(String sql, String paramsJson)
 			throws Exception {
 		return client.update(sql, paramsJson);
+	}
+
+	public int update(String sql, String paramsJson, int queryTimeoutSeconds)
+			throws Exception {
+		return client.update(sql, paramsJson, queryTimeoutSeconds);
 	}
 
 	public double insertAndGetId(String sql, String paramsJson)

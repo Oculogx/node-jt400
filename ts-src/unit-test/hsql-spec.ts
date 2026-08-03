@@ -35,6 +35,27 @@ describe('hsql in memory', () => {
       expect(res[0]).to.have.property('MYNAME')
     })
 
+    it('should accept a per-call queryTimeout option', async () => {
+      const res = await jt400.query<any>('select * from testtbl', [], {
+        queryTimeout: 5,
+      })
+      expect(res.length).to.equal(1)
+    })
+
+    it('should accept a per-call queryTimeout option on update', async () => {
+      const updated = await jt400.update(
+        "update testtbl set NAME='Foo bar baz2'",
+        [],
+        { queryTimeout: 5 }
+      )
+      expect(updated).to.equal(1)
+    })
+
+    it('should return empty stats for in-memory connections', async () => {
+      const stats = await jt400.stats()
+      expect(stats).to.deep.equal({})
+    })
+
     it('should query as stream', (done) => {
       const stream = jt400.createReadStream('select * from testtbl')
       const jsonStream = stream.pipe(parse([true]))

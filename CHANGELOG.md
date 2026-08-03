@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. Please note that this changelog was added in version 4.0 so documentation on versions prior to that are incomplete.
 
+## [5.2.0] - 2026-07-27
+
+### Added
+
+- Per-call `queryTimeout` option (seconds) on `query` and `update`, overriding the pool-wide `'query timeout'` for a single statement.
+- Pool tuning options mapped to the underlying `AS400JDBCConnectionPool`: `'pool cleanup interval'`, `'pool max inactivity'`, `'pool max lifetime'`, `'pool max use count'`, `'pool max use time'`, `'pool pretest connections'`, `'pool run maintenance'`, `'pool thread used'`.
+- `pool.stats()` — point-in-time pool counters (`activeConnections`, `availableConnections`, `maxConnections`).
+- Unknown config keys are logged as warnings at pool creation, since the JDBC driver silently ignores unrecognized properties.
+
+### Fixed
+
+- All config values are coerced to strings before being handed to the JDBC driver. Previously a non-string value (e.g. `'socket timeout': 45000` as a number) was silently dropped because `Properties.getProperty` only returns String values.
+
 ## [5.1.0] - 2026-07-23
 
 ### Added
