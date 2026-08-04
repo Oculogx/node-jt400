@@ -142,6 +142,9 @@ export function createConnection({
     ifs() {
       return createIfs(connection, bufferToJavaType, javaTypeToBuffer)
     },
+    stats() {
+      return connection.getPoolStats().then(JSON.parse)
+    },
     defineProgram(opt: ProgramDefinitionOptions) {
       const pgm = connection.pgmSync(
         opt.programName,
