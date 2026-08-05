@@ -58,6 +58,10 @@ public class JdbcJsonClient
 	{
 		if (st == null)
 		{
+			// Normal path, deliberately unlogged: st is null whenever
+			// prepareStatement itself threw, so the finally block runs
+			// before st was ever assigned. Nothing was opened; nothing to
+			// close. The original exception is already propagating.
 			return;
 		}
 		try

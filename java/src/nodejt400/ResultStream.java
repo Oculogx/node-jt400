@@ -39,6 +39,9 @@ public class ResultStream {
 
 	public void close() throws Exception {
 		if (closed) {
+			// Double-close is a normal path (read() closing at end-of-stream
+			// followed by an explicit close). Silent no-op, mirroring JDBC
+			// close() semantics, so the connection is never returned twice.
 			return;
 		}
 		closed = true;

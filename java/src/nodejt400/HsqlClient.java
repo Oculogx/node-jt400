@@ -92,6 +92,12 @@ public class HsqlClient implements ConnectionProvider
 		return client.update(sql, paramsJson, queryTimeoutSeconds);
 	}
 
+	/**
+	 * The in-memory connection is handed to the TS layer directly (not
+	 * wrapped in JT400), so it must expose the same method surface.
+	 * There is no pool here; empty stats keep Connection.stats() working
+	 * against in-memory connections (see hsql-spec).
+	 */
 	public String getPoolStats()
 	{
 		return "{}";

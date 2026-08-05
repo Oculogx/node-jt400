@@ -34,6 +34,10 @@ public class StatementWrap {
 
 	public void close() throws Exception {
 		if (closed) {
+			// Double-close is a normal path (e.g. asArray's finally after
+			// next() already closed, or an explicit close after stream end).
+			// It must stay a silent no-op — mirroring JDBC close() semantics —
+			// so the connection is never returned to the pool twice.
 			return;
 		}
 		closed = true;

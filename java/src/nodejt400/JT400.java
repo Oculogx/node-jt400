@@ -137,7 +137,8 @@ public class JT400 {
 				}
 			}
 		} catch (Exception e) {
-			// validation is best-effort only
+			// Validation is best-effort — never fail pool creation over it.
+			System.out.println("[node-jt400] Config validation skipped (could not read driver properties): " + e);
 		}
 	}
 
