@@ -78,6 +78,12 @@ export interface MessageFileHandler {
 
 export type TransactionFun = (transaction: BaseConnection) => Promise<any>
 
+export interface PoolStats {
+  activeConnections?: number
+  availableConnections?: number
+  maxConnections?: number
+}
+
 export interface Connection extends BaseConnection {
   pgm: (
     programName: string,
@@ -95,5 +101,10 @@ export interface Connection extends BaseConnection {
     params: MessageFileHandlerOptions
   ) => Promise<MessageFileHandler>
   ifs: () => Ifs
+  /**
+   * Point-in-time connection pool counters. Returns {} for non-pooled
+   * (single or in-memory) connections.
+   */
+  stats: () => Promise<PoolStats>
   close: Close
 }

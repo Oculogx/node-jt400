@@ -28,6 +28,12 @@ public class HsqlClient implements ConnectionProvider
 	}
 
 	@Override
+	public int getQueryTimeout()
+	{
+		return 0;
+	}
+
+	@Override
 	public void close(){
 	}
 
@@ -35,6 +41,12 @@ public class HsqlClient implements ConnectionProvider
 			throws Exception
 	{
 		return client.query(sql, paramsJson, trim);
+	}
+
+	public String query(String sql, String paramsJson, boolean trim, int queryTimeoutSeconds)
+			throws Exception
+	{
+		return client.query(sql, paramsJson, trim, queryTimeoutSeconds);
 	}
 
 	public ResultStream queryAsStream(String sql, String paramsJson,
@@ -72,6 +84,23 @@ public class HsqlClient implements ConnectionProvider
 			throws Exception
 	{
 		return client.update(sql, paramsJson);
+	}
+
+	public int update(String sql, String paramsJson, int queryTimeoutSeconds)
+			throws Exception
+	{
+		return client.update(sql, paramsJson, queryTimeoutSeconds);
+	}
+
+	/**
+	 * The in-memory connection is handed to the TS layer directly (not
+	 * wrapped in JT400), so it must expose the same method surface.
+	 * There is no pool here; empty stats keep Connection.stats() working
+	 * against in-memory connections (see hsql-spec).
+	 */
+	public String getPoolStats()
+	{
+		return "{}";
 	}
 
 	public double insertAndGetId(String sql, String paramsJson)

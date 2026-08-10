@@ -20,7 +20,12 @@ export interface TablesReadStream {
 }
 
 export interface JDBCConnection {
-  query: (sql: string, jsonParams: string, trim: boolean) => Promise<string>
+  query: (
+    sql: string,
+    jsonParams: string,
+    trim: boolean,
+    queryTimeoutSeconds?: number
+  ) => Promise<string>
   queryAsStream: (
     sql: string,
     jsonParams: string,
@@ -39,7 +44,11 @@ export interface JDBCConnection {
     tableNamePattern: string,
     columnNamePattern: string
   ) => Promise<string>
-  update: (sql: string, jsonParams: string) => Promise<number>
+  update: (
+    sql: string,
+    jsonParams: string,
+    queryTimeoutSeconds?: number
+  ) => Promise<number>
   batchUpdate: (sql: string, jsonParams: string) => Promise<number[]>
   insertAndGetId: (sql: string, jsonParams: string) => Promise<number>
 }
@@ -117,5 +126,6 @@ export interface JT400 extends JDBCConnection {
   ) => Promise<IfsWriteStream>
   deleteIfsFile: (fileName: string) => Promise<boolean>
   getIfsFileMetadata: (fileName: string) => Promise<string>
+  getPoolStats: () => Promise<string>
   close: () => Promise<void>
 }

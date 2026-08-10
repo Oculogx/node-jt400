@@ -1,7 +1,7 @@
 {
   "name": "@oculogx/node-jt400",
   "author": "Tryggingamiðstöðin <bt.hugbunadargerd@tm.is>, Ox",
-  "version": "5.0.11",
+  "version": "5.2.0",
   "description": "JT400 (IBM Toolbox) for NodeJS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,7 +24,8 @@
     "build-dev": "tsc --watch",
     "test-dev": "mocha dist/test --watch",
     "build-all": "npm run build && npm run build-java",
-    "build-java": "ant archive -buildfile ./java",
+    "build-java": "cd java && bash build-jar.sh",
+    "build-java-ant": "ant archive -buildfile ./java",
     "ci": "npm run clean && npm run build && npm run test && npm run integration-test"
   },
   "keywords": [

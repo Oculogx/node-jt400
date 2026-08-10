@@ -14,7 +14,19 @@ export interface BLOB {
 export type Param = string | number | Date | null | CLOB | BLOB
 
 export interface QueryOptions {
-  trim: boolean
+  trim?: boolean
+  /**
+   * Per-statement timeout in SECONDS, overriding the pool-wide
+   * 'query timeout' config for this call only. Requires the
+   * 'query timeout mechanism' to be 'cancel' (the default when any query
+   * timeout is configured) to interrupt a running or lock-blocked statement.
+   */
+  queryTimeout?: number
+}
+
+export interface UpdateOptions {
+  /** Per-statement timeout in SECONDS. See QueryOptions.queryTimeout. */
+  queryTimeout?: number
 }
 
 export interface Metadata {
@@ -38,7 +50,11 @@ export type Query = <T>(
   params?: Param[],
   options?: QueryOptions
 ) => Promise<T[]>
-export type Update = (sql: string, params?: Param[]) => Promise<number>
+export type Update = (
+  sql: string,
+  params?: Param[],
+  options?: UpdateOptions
+) => Promise<number>
 export type CreateReadStream = (sql: string, params?: Param[]) => Readable
 export type InsertAndGetId = (sql: string, params?: Param[]) => Promise<number>
 

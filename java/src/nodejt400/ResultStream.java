@@ -23,6 +23,8 @@ public class ResultStream {
 
 	private boolean init = true;
 
+	private boolean closed = false;
+
 	private String sep = "[";
 
 	public ResultStream(ConnectionProvider connectionProvider, Connection c,
@@ -36,9 +38,22 @@ public class ResultStream {
 	}
 
 	public void close() throws Exception {
+		if (closed) {
+			// Double-close is a normal path (read() closing at end-of-stream
+			// followed by an explicit close). Silent no-op, mirroring JDBC
+			// close() semantics, so the connection is never returned twice.
+			return;
+		}
+		closed = true;
 		next = false;
-		rs.close();
-		st.close();
+		try {
+			rs.close();
+			st.close();
+		} catch (Exception e) {
+			// A close can fail on a broken connection; the connection must
+			// still be returned or it leaks from the pool.
+			System.out.println("[node-jt400] Failed to close result stream: " + e);
+		}
 		connectionProvider.returnConnection(c);
 	}
 

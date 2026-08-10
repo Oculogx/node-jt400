@@ -23,7 +23,64 @@ public class JdbcJsonClient
 		this.pool = pool;
 	}
 
+	/**
+	 * Applies the connection provider's configured query timeout (seconds) to a
+	 * statement before execution. 0 = disabled (no-op). Combined with the
+	 * "query timeout mechanism"="cancel" connection property, this makes the
+	 * driver cancel a running / lock-blocked query after the timeout instead of
+	 * hanging until the caller (or Cloud Run) gives up.
+	 */
+	private void applyQueryTimeout(Statement st) throws SQLException
+	{
+		applyQueryTimeout(st, 0);
+	}
+
+	/**
+	 * overrideSeconds > 0 overrides the connection-wide "query timeout" for
+	 * this statement only; 0 falls back to the configured default.
+	 */
+	private void applyQueryTimeout(Statement st, int overrideSeconds) throws SQLException
+	{
+		int seconds = overrideSeconds > 0 ? overrideSeconds : pool.getQueryTimeout();
+		if (seconds > 0)
+		{
+			st.setQueryTimeout(seconds);
+		}
+	}
+
+	/**
+	 * Closes a statement without throwing. On a connection broken mid-request
+	 * (e.g. a socket timeout) close itself can fail; letting that propagate
+	 * from a finally block would mask the original exception and skip
+	 * returnConnection, permanently leaking the pooled connection ("zombie").
+	 */
+	private static void closeQuietly(Statement st)
+	{
+		if (st == null)
+		{
+			// Normal path, deliberately unlogged: st is null whenever
+			// prepareStatement itself threw, so the finally block runs
+			// before st was ever assigned. Nothing was opened; nothing to
+			// close. The original exception is already propagating.
+			return;
+		}
+		try
+		{
+			st.close();
+		}
+		catch (Exception e)
+		{
+			System.out.println("[node-jt400] Failed to close statement: " + e);
+		}
+	}
+
 	public String query(String sql, String paramsJson, boolean trim)
+			throws Exception
+	{
+		return query(sql, paramsJson, trim, 0);
+	}
+
+	public String query(String sql, String paramsJson, boolean trim, int queryTimeoutSeconds)
 			throws Exception
 	{
 		Connection c = pool.getConnection();
@@ -33,6 +90,7 @@ public class JdbcJsonClient
 		{
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
+			applyQueryTimeout(st, queryTimeoutSeconds);
 			setParams(params, st);
 			ResultSet rs = st.executeQuery();
 			ResultSetMetaData metaData = rs.getMetaData();
@@ -124,8 +182,7 @@ public class JdbcJsonClient
 		}
 		finally
 		{
-			if (st != null)
-				st.close();
+			closeQuietly(st);
 			pool.returnConnection(c);
 		}
 
@@ -139,10 +196,15 @@ public class JdbcJsonClient
 		try {
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
+			applyQueryTimeout(st);
 			setParams(params, st);
 			ResultSet rs = st.executeQuery();
 			return new ResultStream(pool, c, st, rs, bufferSize);
 		} catch (Exception e) {
+			// On success the ResultStream owns the connection; on failure it
+			// must be returned here or it leaks from the pool.
+			closeQuietly(st);
+			pool.returnConnection(c);
 			throw e;
 		}
 	}
@@ -156,14 +218,13 @@ public class JdbcJsonClient
 		{
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
+			applyQueryTimeout(st);
 			setParams(params, st);
 			return new StatementWrap(pool, c, st);
 		}
 		catch (Exception e)
 		{
-			if(st!=null) {
-				st.close();
-			}
+			closeQuietly(st);
 			pool.returnConnection(c);
 			throw e;
 		}
@@ -249,6 +310,12 @@ public class JdbcJsonClient
 	public int update(String sql, String paramsJson)
 			throws Exception
 	{
+		return update(sql, paramsJson, 0);
+	}
+
+	public int update(String sql, String paramsJson, int queryTimeoutSeconds)
+			throws Exception
+	{
 		Connection c = pool.getConnection();
 		PreparedStatement st = null;
 		int result = 0;
@@ -256,6 +323,7 @@ public class JdbcJsonClient
 		{
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql);
+			applyQueryTimeout(st, queryTimeoutSeconds);
 			setParams(params, st);
 			result = st.executeUpdate();
 		}
@@ -265,8 +333,7 @@ public class JdbcJsonClient
 		}
 		finally
 		{
-			if (st != null)
-				st.close();
+			closeQuietly(st);
 			pool.returnConnection(c);
 		}
 		return result;
@@ -279,6 +346,7 @@ public class JdbcJsonClient
 		int[] result = null;
 		try {
 			st = c.prepareStatement(sql);
+			applyQueryTimeout(st);
 			JSONArray jsonArray = (JSONArray) JSONValue.parse(paramsListJson);
 			int n = jsonArray.size();
 			for (int i = 0; i < n; i++) {
@@ -290,8 +358,7 @@ public class JdbcJsonClient
 		} catch (Exception e) {
 			throw e;
 		} finally {
-			if (st != null)
-				st.close();
+			closeQuietly(st);
 			pool.returnConnection(c);
 		}
 		return result;
@@ -307,6 +374,7 @@ public class JdbcJsonClient
 		{
 			JSONArray params = parseParams(paramsJson);
 			st = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+			applyQueryTimeout(st);
 			setParams(params, st);
 			st.executeUpdate();
 			ResultSet keys = st.getGeneratedKeys();
@@ -321,8 +389,7 @@ public class JdbcJsonClient
 		}
 		finally
 		{
-			if (st != null)
-				st.close();
+			closeQuietly(st);
 			pool.returnConnection(c);
 		}
 		return result;
